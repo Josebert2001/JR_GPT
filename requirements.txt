@@ -11,9 +11,9 @@ certifi==2024.2.2
 chainlit==1.0.200
 charset-normalizer==3.3.2
 click==8.1.7
-ctransformers==0.2.27
 dataclasses-json==0.5.14
 Deprecated==1.2.14
+groq==0.25.0
 fastapi==0.108.0
 fastapi-socketio==0.0.10
 filelock==3.13.1
