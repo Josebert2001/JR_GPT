@@ -2,11 +2,6 @@
 # Whether to enable telemetry (default: true). No personal data is collected.
 enable_telemetry = true
 
-# Project name
-name = "Web Explorer AI"
-
-# Default page title
-title = "Web Explorer AI with LLaMA 3.3 70B Versatile"
 
 # List of environment variables to be provided by each user to use the app.
 user_env = []
@@ -25,10 +20,10 @@ allow_origins = ["*"]
 
 [features]
 # Process and display HTML in messages. This can be a security risk (see https://stackoverflow.com/questions/19603097/why-is-it-dangerous-to-render-user-generated-html-or-javascript)
-unsafe_allow_html = true
+unsafe_allow_html = false
 
 # Process and display mathematical expressions. This can clash with "$" characters in messages.
-latex = true
+latex = false
 
 # Autoscroll new user messages at the top of the window
 user_message_autoscroll = true
@@ -70,18 +65,20 @@ edit_message = true
     allowed_executables = [ "npx", "uvx" ]
 
 [UI]
-# Name of the assistant
-name = "Web Explorer AI"
-description = "Powered by LLaMA 3.3 70B Versatile via Groq"
-theme = "dark"
-show_readme_as_default = true
+# Name of the assistant.
+name = "Assistant"
 
-# Chain of Thought (CoT) display mode
+# default_theme = "dark"
+
+# layout = "wide"
+
+# default_sidebar_state = "open"
+
+# Description of the assistant. This is used for HTML tags.
+# description = ""
+
+# Chain of Thought (CoT) display mode. Can be "hidden", "tool_call" or "full".
 cot = "full"
-
-# Layout settings
-layout = "wide"
-default_sidebar_state = "open"
 
 # Specify a CSS file that can be used to customize the user interface.
 # The CSS file can be served from the public directory or via an external link.

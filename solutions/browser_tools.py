@@ -62,18 +62,33 @@ class BrowserTools:
             return False
 
     async def setup(self):
-        """Initialize the browser if not already done.
-
-        Raises:
-            BrowserError: If browser initialization fails
-        """
+        """Initialize the browser if not already done."""
         if not self.browser:
             try:
+                print("Starting Playwright...")
                 self._playwright = await async_playwright().start()
-                self.browser = await self._playwright.chromium.launch()
+                print("Launching browser...")
+                self.browser = await self._playwright.chromium.launch(
+                    args=[
+                        '--no-sandbox',
+                        '--disable-dev-shm-usage',
+                        '--disable-gpu',
+                        '--headless=new'
+                    ],
+                    headless=True
+                )
+                print("Creating new page...")
                 self.page = await self.browser.new_page()
                 await self.page.set_default_timeout(self.default_timeout)
+                print("Setting up event handlers...")
+                self.page.on("pageerror", lambda exc: print(f"Page error: {exc}"))
+                self.page.on("crash", lambda: print("Page crashed"))
+                print("Browser setup complete")
             except Exception as e:
+                print(f"Browser initialization error: {str(e)}")
+                if self._playwright:
+                    await self._playwright.stop()
+                    self._playwright = None
                 raise BrowserError(f"Failed to initialize browser: {str(e)}")
 
     async def cleanup(self):
@@ -91,60 +106,78 @@ class BrowserTools:
                     self._playwright = None
 
     async def navigate(self, url: str, timeout: Optional[int] = None) -> str:
-        """Navigate to a URL with timeout and validation.
+        """Navigate to a URL with enhanced error handling and validation."""
+        if not self.page:
+            await self.setup()
 
-        Args:
-            url (str): URL to navigate to
-            timeout (Optional[int]): Operation timeout in milliseconds
+        # Validate and format URL
+        if not url.startswith(('http://', 'https://')):
+            url = 'https://' + url
 
-        Returns:
-            str: Success message
-
-        Raises:
-            NavigationError: If navigation fails or URL is invalid
-        """
         if not self.validate_url(url):
             raise NavigationError(f"Invalid URL format: {url}")
 
         try:
-            await self.setup()
-            await self.page.goto(url, timeout=timeout or self.default_timeout)
+            response = await self.page.goto(
+                url,
+                timeout=timeout or self.default_timeout,
+                wait_until='networkidle'
+            )
+
+            if not response:
+                raise NavigationError(f"Failed to navigate to {url}: No response")
+
+            if response.status >= 400:
+                raise NavigationError(f"Failed to navigate to {url}: Status {response.status}")
+
+            # Wait for page to be fully loaded
+            await self.page.wait_for_load_state('networkidle')
+
             return f"Successfully navigated to {url}"
+
         except PlaywrightTimeout:
-            raise NavigationError(f"Navigation timeout: {url}")
+            raise NavigationError(f"Navigation to {url} timed out")
         except Exception as e:
-            raise NavigationError(f"Navigation failed: {str(e)}")
+            raise NavigationError(f"Failed to navigate to {url}: {str(e)}")
 
     async def extract_content(self, selectors: Optional[Dict[str, str]] = None) -> Dict[str, Any]:
-        """Extract content from the current page with optional CSS selectors.
+        """Extract content from the current page with enhanced selection."""
+        if not self.page:
+            raise BrowserError("Browser not initialized")
 
-        Args:
-            selectors (Optional[Dict[str, str]]): Dictionary of named selectors to extract
-
-        Returns:
-            Dict[str, Any]: Extracted content
-
-        Raises:
-            ContentExtractionError: If content extraction fails
-        """
         try:
-            result = {
+            # Default content extraction if no selectors provided
+            content = {
                 "title": await self.page.title(),
-                "text": await self.page.evaluate("() => document.body.innerText")
+                "url": self.page.url,
+                "text": await self.page.evaluate('document.body.innerText'),
+                "main_content": await self.page.evaluate("""
+                    () => {
+                        const article = document.querySelector('article, main, [role="main"]');
+                        if (article) return article.innerText;
+                        const content = document.querySelector('.content, #content, [class*="content"]');
+                        if (content) return content.innerText;
+                        return document.body.innerText;
+                    }
+                """),
+                "links": await self.page.evaluate("""
+                    () => Array.from(document.querySelectorAll('a[href]')).map(a => ({
+                        text: a.innerText,
+                        href: a.href
+                    })).filter(link => link.text.trim() && link.href.startsWith('http'))
+                """)
             }
 
-            # Extract content from specific selectors if provided
+            # Add custom selector content if provided
             if selectors:
-                result["selected_content"] = {}
-                for name, selector in selectors.items():
+                for key, selector in selectors.items():
                     try:
-                        element = await self.page.query_selector(selector)
-                        if element:
-                            result["selected_content"][name] = await element.inner_text()
+                        content[key] = await self.page.inner_text(selector)
                     except Exception as e:
-                        result["selected_content"][name] = f"Error: {str(e)}"
+                        content[key] = f"Failed to extract: {str(e)}"
 
-            return result
+            return content
+
         except Exception as e:
             raise ContentExtractionError(f"Failed to extract content: {str(e)}")
 
